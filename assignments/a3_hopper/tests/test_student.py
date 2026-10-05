@@ -13,6 +13,13 @@ def test_tma_wgmma(stages,k,cuda_device):
     exercise_gemm("a3",(128,128,k),"tma_wgmma",cuda_device,{"stages":stages},repetitions=4)
 
 
+# M != N and several output tiles: one 128x128 tile cannot expose grid
+# indexing or a mix-up between the A and B extents.
+@pytest.mark.parametrize("dims",[(256,128,64),(128,384,96),(384,256,160)])
+def test_tma_wgmma_multi_tile(dims,cuda_device):
+    exercise_gemm("a3",dims,"tma_wgmma",cuda_device,repetitions=2)
+
+
 @pytest.mark.parametrize("variant",["duplicate","multicast","dsm"])
 def test_cluster_copy(variant,cuda_device):
     for seed in range(3):

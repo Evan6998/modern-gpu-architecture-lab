@@ -26,9 +26,13 @@ GEMM 仍是 FP16 / FP32 accumulate / FP16，**本题限定 M,N 为 128 倍数、
 **实现位置：`kernels.py`**；可替换其内部为 CUDA C++ backend，但保持 launcher 签名。
 `pipeline_model.py` 是给定的 host ownership 模型，不等于硬件 barrier 的初始化答案。
 
+`config` 读 `tile_m / tile_n / tile_k / stages / producer_warps / consumer_warpgroups`。公开测试用默认值
+（tile 128×128×32）和 `stages=1/2/3`，这些必须可用；不支持的取值抛 `ValueError`，不要静默换成别的值。
+
 ## 公开测试
 
-stages=1/2/3、不同 K、4 轮改变输入、非默认 stream、输入未修改；cluster 三版重复随机输入。
+stages=1/2/3、不同 K、4 轮改变输入、非默认 stream、输入未修改；另有 M≠N 的多 tile shape
+（256×128、128×384、384×256），单个 128×128 tile 测不出 grid 下标和 A/B 维度写反；cluster 三版重复随机输入。
 精确 Hopper gate：SM90，不能默认把 WGMMA 当成未来所有 GPU 都支持的接口。
 
 ```bash

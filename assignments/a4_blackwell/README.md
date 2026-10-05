@@ -18,7 +18,8 @@ prepare_quantized(a_quantized, bt_quantized) -> PreparedQuantizedGemm
 quant_gemm(prepared, out, *, config=None)
 ```
 
-Dense 输入/输出与 A3 一致，M/N 为 128 倍数，K 为 32 倍数。
+Dense 输入/输出与 A3 一致，M/N 为 128 倍数，K 为 32 倍数。M 可以是 128 的奇数倍：
+2-SM 版本里 CTA pair 越界的那一半不能写出，公开测试包含 M=128。
 量化 operand 均以 **K-major 逻辑矩阵**定义：A 是 `[M,K]`，另一份是 **Bᵀ `[N,K]`**。
 `mgpu/quantization.py` 提供可运行的编码、解码和数值 oracle，不要求你重写 quantizer。
 
@@ -32,13 +33,20 @@ MXFP4 低位 nibble 对应偶数 K，高位对应奇数 K；code bit3 是 sign�
 量化采用 nearest ties-to-even；选择能覆盖 block 最大绝对值的 power-of-two scale。
 这是 **MXFP4，不是 NVFP4**。硬件所需的 swizzled/scale layout 可在 `prepare_quantized` 中生成。[PTX]
 
+**`quant_gemm` 的 K**：FP8 为 32 的倍数；**MXFP4 为 64 的倍数**。`kind::mxf4` 的一条 MMA 消耗 K=64，
+也就是两个 32 元素的 scale block；canonical 格式本身仍按 32 分块，但 K%64==32 的补零尾块不在本题范围，
+`student.quant_gemm` 会直接拒绝。指令形状以你所用工具链的 [PTX] / [TCGEN05] 为准。
+
 **实现位置：`kernels.py` 与必要时 `student.prepare_quantized`**。
+`config` 与 A3 相同；公开测试只用默认值，不支持的取值抛 `ValueError`，不要静默换成别的值。
 FP16 解码再调用普通 GEMM 可以通过数值检查，但不满足低精度硬件要求。
 
 ## 公开测试
 
-Dense 三种 variant、多种 shape、重复运行；量化覆盖 zero、mixed scales、独立 codebook/nibble packing、
-ties-to-even、decode oracle 和输入不变。自动 gate 只接收 SM100，不把 RTX SM120 当作相同 ISA。
+Dense 三种 variant、多种 shape（含 M>N 与 N>M）、重复运行；量化覆盖 zero、mixed scales、独立 codebook/nibble
+packing、ties-to-even、decode oracle 和输入不变，GPU 侧除 128×128×64 外还有 256×128×128 与 128×384×192：
+K=64 对 MXFP4 只是一条 MMA、一个输出 tile，测不到 K 循环、tile grid 和逐 tile 的 scale 布局。
+自动 gate 只接收 SM100，不把 RTX SM120 当作相同 ISA。
 
 ```bash
 python -m mgpu.grade a4

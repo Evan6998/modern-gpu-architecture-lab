@@ -21,6 +21,16 @@ def test_future_tokens_do_not_affect_past():
     torch.testing.assert_close(first[:,:,:8],second[:,:,:8],atol=0,rtol=0)
 
 
+def test_peaked_logits_select_one_past_key():
+    # One-hot keys and a large one-hot query give an analytic answer: row i puts
+    # all but ~1e-6 of its weight on key i//2, which is never in its future.
+    s=64;target=torch.arange(s)//2
+    k=torch.eye(s,128).view(1,1,s,128).half()
+    q=(200*torch.eye(s,128)[target]).view(1,1,s,128).half()
+    v=torch.randn(1,1,s,128,generator=torch.Generator().manual_seed(5)).half()
+    torch.testing.assert_close(reference.attention(q,k,v),v[:,:,target],atol=1e-3,rtol=1e-3)
+
+
 def test_invalid_head_dimension():
     x=torch.zeros(1,2,17,64).half()
     with pytest.raises(ValueError):student.attention(x,x.clone(),x.clone(),torch.empty_like(x))

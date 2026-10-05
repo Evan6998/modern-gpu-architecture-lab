@@ -1,16 +1,19 @@
 import pytest
 import torch
-from mgpu.bench import rand
+from mgpu.bench import rand,ATTENTION_Q_GAIN
 from mgpu.checks import assert_output
 from .. import reference,student
 pytestmark=[pytest.mark.gpu,pytest.mark.student,pytest.mark.arch("ampere")]
 
 
 @pytest.mark.parametrize("s",[1,17,129,256,1024])
-@pytest.mark.parametrize("pattern",["random","zero_logits"])
+@pytest.mark.parametrize("pattern",["random","zero_logits","peaked"])
 def test_fused_attention(s,pattern,cuda_device):
     q,k,v=[rand((1,2,s,128),cuda_device,torch.float16,seed) for seed in (17,19,23)]
     if pattern=="zero_logits":q.zero_()
+    # "random" logits have std ~0.06, i.e. almost a prefix average. "peaked" has
+    # std ~2, so the running max really moves between key tiles.
+    if pattern=="peaked":q.mul_(ATTENTION_Q_GAIN)
     copies=[x.clone() for x in (q,k,v)]
     expected=reference.attention(q,k,v);out=torch.full_like(expected,float("nan"))
     student.attention(q,k,v,out)

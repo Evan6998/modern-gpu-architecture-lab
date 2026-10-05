@@ -20,6 +20,10 @@ gemm(a, b, out, *, variant="simt", config=None)
 边缘 tile 可以使用你自己的 SIMT kernel，但不能调用库 GEMM 代替核心计算。
 **实现位置：`csrc/kernels.cu`**。参考与库 baseline 分开；不可修改输入或返回新 tensor 代替 out。
 
+`config` 读 `tile_m / tile_n / tile_k / stages / warps`（默认 128 / 128 / 32 / 2 / 4）。公开测试只用默认值
+和 `stages=1/2/3`，这些必须可用；其余取值只需支持你做消融的那几个，不支持的用 `TORCH_CHECK` 拒绝，
+不要静默换成别的值。
+
 ## 公开测试
 
 已知答案、零矩阵与非法接口在 CPU 检查；GPU 覆盖 1×1×1、37×53×29、不同 M/N/K、

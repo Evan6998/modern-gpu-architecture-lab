@@ -1,5 +1,16 @@
 import torch
 
+# (atol, rtol) per operation: the bounds the public GPU tests use. The benchmark
+# gate reads the same table, so it never times a result that grading would reject.
+TOLERANCES = {
+    "transpose": (0.0, 0.0),
+    "cluster_copy": (0.0, 0.0),
+    "softmax": (2e-6, 2e-5),
+    "attention": (3e-3, 1e-2),
+    "gemm": (0.03, 0.01),
+    "quant_gemm": (0.03, 0.01),
+}
+
 
 def assert_output(actual, expected, *, atol=0.03, rtol=0.01):
     if not isinstance(actual, torch.Tensor) or actual.shape != expected.shape:

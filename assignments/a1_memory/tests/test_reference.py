@@ -34,5 +34,14 @@ def test_contract_rejects_alias():
     with pytest.raises(ValueError):student.softmax(x,x)
 
 
+def test_config_is_forwarded_or_rejected():
+    x,out=torch.zeros(3,5),torch.zeros(5,3)
+    with pytest.raises(ValueError,match="tile_m"):student.transpose(x,out,config={"stages":3})
+    with pytest.raises(ValueError,match="warps"):student.softmax(x,torch.zeros(3,5),config={"tile_m":16})
+    with pytest.raises(ValueError):student.transpose(x,out,config={"tile_m":0})
+    # A supported key passes the host contract and stops at the GPU gate.
+    with pytest.raises(RuntimeError):student.transpose(x,out,config={"tile_m":16})
+
+
 def test_contract_rejects_dtype():
     with pytest.raises(TypeError):student.softmax(torch.zeros(2,4).half(),torch.zeros(2,4).half())

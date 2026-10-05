@@ -4,6 +4,7 @@ import torch
 from mgpu.quantization import (quantize_reference,dequantize_reference,
     PreparedQuantizedGemm,quantized_gemm_reference)
 from mgpu.checks import error_metrics
+from .. import student
 
 
 @pytest.mark.parametrize("format",["fp8","mxfp4"])
@@ -59,3 +60,13 @@ def test_nonfinite_input_rejected():
 
 def test_invalid_k_rejected():
     with pytest.raises(ValueError):quantize_reference(torch.ones(2,33),"mxfp4")
+
+
+def test_quant_gemm_k_granularity_follows_the_mma_instruction():
+    out=torch.zeros(128,128).half()
+    q4=quantize_reference(torch.ones(128,96),"mxfp4")
+    with pytest.raises(ValueError,match="multiple of 64"):
+        student.quant_gemm(PreparedQuantizedGemm(q4,q4),out)
+    # FP8 keeps K%32: the same shape passes the contract and stops at the GPU gate.
+    q8=quantize_reference(torch.ones(128,96),"fp8")
+    with pytest.raises(RuntimeError):student.quant_gemm(PreparedQuantizedGemm(q8,q8),out)

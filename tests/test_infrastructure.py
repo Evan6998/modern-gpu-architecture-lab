@@ -1,12 +1,14 @@
 import csv
 import json
 from pathlib import Path
+import types
 import pytest
 import torch
+from mgpu import bench,grade
 from mgpu.config import KernelConfig
-from mgpu.hardware import compatible
+from mgpu.hardware import compatible,require
 from mgpu.timing import Timing,measure
-from mgpu.checks import assert_output,error_metrics
+from mgpu.checks import assert_output,error_metrics,TOLERANCES
 from mgpu.registry import ASSIGNMENTS,module
 from mgpu.bench import append_csv,COLUMNS,prepare_case
 from mgpu.grade import junit_counts
@@ -23,6 +25,11 @@ def test_registry_imports_without_cuda_compilation():
     ((13,0),"ampere",False),((7,5),"ampere",False),((7,5),"cuda",True)])
 def test_architecture_gates(cc,family,expected):
     assert compatible(family,cc)==expected
+
+
+def test_cpu_tensors_rejected_the_same_way_on_a_gpu_machine(monkeypatch):
+    monkeypatch.setattr(torch.cuda,"is_available",lambda:True)
+    with pytest.raises(RuntimeError,match="CUDA tensors"):require("cuda",torch.device("cpu"))
 
 
 @pytest.mark.parametrize("bad",[{"stages":0},{"stages":9},{"warps":-1},{"tile_m":1.5},{"stages":True}])
@@ -52,6 +59,42 @@ def test_cpu_timer_calls_and_labels():
 @pytest.mark.parametrize("kwargs",[{"repeats":0},{"warmup":0},{"graph":True},{"evict_mb":1}])
 def test_bad_cpu_timer_arguments(kwargs):
     with pytest.raises(ValueError):measure(lambda:None,device=torch.device("cpu"),**kwargs)
+
+
+def test_cuda_workspace_accounting_excludes_eviction_buffer(monkeypatch):
+    """Drive measure()'s CUDA branch with a fake allocator; no GPU involved."""
+    import mgpu.timing as timing
+    mib=1024*1024;state={"allocated":0,"peak":0}
+    def alloc(n):
+        state["allocated"]+=n;state["peak"]=max(state["peak"],state["allocated"])
+    class Buffer:
+        def fill_(self,value):return self
+    class Event:
+        def __init__(self,enable_timing=False):pass
+        def record(self):pass
+        def synchronize(self):pass
+        def elapsed_time(self,other):return 1.
+    class Device:
+        def __init__(self,device):pass
+        def __enter__(self):return self
+        def __exit__(self,*exc):return False
+    def empty(n,**kwargs):
+        alloc(n);return Buffer()
+    cuda=types.SimpleNamespace(synchronize=lambda device=None:None,device=Device,Event=Event,
+        memory_allocated=lambda device=None:state["allocated"],
+        max_memory_allocated=lambda device=None:state["peak"],
+        reset_peak_memory_stats=lambda device=None:state.__setitem__("peak",state["allocated"]))
+    monkeypatch.setattr(timing,"torch",types.SimpleNamespace(cuda=cuda,empty=empty,uint8=torch.uint8))
+    def fn():  # an operator with a transient 3 MiB workspace
+        alloc(3*mib);state["allocated"]-=3*mib
+    t=timing.measure(fn,device=torch.device("cuda"),warmup=1,repeats=2,evict_mb=64)
+    assert t.peak_extra_bytes==3*mib
+    assert t.scope=="cuda_events_operator" and t.cache_policy=="eviction_buffer_64MiB"
+    assert len(t.samples_ms)==2
+
+
+def test_cpu_timer_reports_no_gpu_workspace():
+    assert measure(lambda:None,device=torch.device("cpu"),warmup=1,repeats=1).peak_extra_bytes is None
 
 
 def test_nan_output_fails():
@@ -91,6 +134,37 @@ def test_cpu_benchmark_preparation(aid,op,variant,dims):
     fn,out,expected,flops,io_bytes,err=prepare_case(aid,op,dims,"reference",variant,torch.device("cpu"),{},"prepacked")
     fn();assert_output(out,expected)
     assert flops>=0 and io_bytes>0
+
+
+def test_every_benchmarked_operation_has_a_tolerance():
+    for name,spec in ASSIGNMENTS.items():
+        if name!="a6":assert set(spec["ops"])<=set(TOLERANCES),name
+
+
+@pytest.mark.parametrize("argv,label",[
+    (["a1","--op","transpose"],"n/a"),(["a3","--op","gemm"],"n/a"),
+    (["a4","--op","quant_gemm","--variant","mxfp4"],"mxfp4")])
+def test_bench_cli_labels_reference_rows(tmp_path,argv,label):
+    bench.main(argv+["--impl","reference","--device","cpu","--suite","smoke",
+                     "--warmup","1","--repeats","2","--output",str(tmp_path)])
+    with (tmp_path/"bench.csv").open() as f:rows=list(csv.DictReader(f))
+    assert [r["variant"] for r in rows]==[label]
+    assert rows[0]["scope"]=="cpu_reference_wall_time" and rows[0]["peak_extra_allocated_bytes"]==""
+
+
+def test_bench_attention_uses_peaked_logits():
+    dims=[1,1,129,128]
+    fn,out,expected,*_=prepare_case("a5","attention",dims,"reference","fused",torch.device("cpu"),{},"prepacked")
+    q,k,v=[bench.rand(dims,"cpu",torch.float16,seed) for seed in (17,23,29)]
+    q=q*bench.ATTENTION_Q_GAIN
+    logits=q.float()@k.float().transpose(-1,-2)/128**.5
+    assert 1<float(logits.std())<4  # far from uniform; rand() alone gives ~0.06
+    torch.testing.assert_close(expected,module("a5","reference").attention(q,k,v),atol=0,rtol=0)
+
+
+def test_grade_rejects_unknown_variant(capsys):
+    with pytest.raises(SystemExit):grade.main(["a1","--variant","nieve"])
+    assert "naive" in capsys.readouterr().err
 
 
 def test_manifest_complete():

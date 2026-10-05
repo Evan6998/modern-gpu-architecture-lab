@@ -22,10 +22,13 @@ def load_extension(assignment: str):
         raise ValueError(f"{assignment} has no CUDA C++ extension")
     # Architecture-specific flags can be selected by TORCH_CUDA_ARCH_LIST.
     # Do not force an H100 binary onto Blackwell, or target all CUDA devices.
+    # No -std flag here: torch.utils.cpp_extension supplies the standard its own
+    # headers need (C++17 for older releases, C++20 for newer ones). Forcing
+    # -std=c++17 overrides that and breaks the build against C++20-only headers.
     return load(
         name=f"mgpu_{assignment}",
         sources=[str(src / "bindings.cpp"), str(src / "kernels.cu")],
-        extra_cflags=["-O3", "-std=c++17"],
-        extra_cuda_cflags=["-O3", "-std=c++17", "-lineinfo", "--ptxas-options=-v"],
+        extra_cflags=["-O3"],
+        extra_cuda_cflags=["-O3", "-lineinfo", "--ptxas-options=-v"],
         verbose=os.environ.get("MGPU_BUILD_VERBOSE", "0") == "1",
     )
