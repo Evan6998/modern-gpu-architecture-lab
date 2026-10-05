@@ -1,0 +1,20 @@
+{
+  "assignment": "a1",
+  "status": "harness_only_not_assignment_credit",
+  "cpu_only": true,
+  "exit_codes": [
+    0
+  ],
+  "counts": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "manual_review_required": [
+    "architecture evidence",
+    "performance/ablation",
+    "report"
+  ],
+  "numeric_grade": null
+}

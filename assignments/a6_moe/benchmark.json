@@ -1,0 +1,19 @@
+{
+  "smoke": {
+    "tokens": 33,
+    "d_model": 64,
+    "d_out": 32
+  },
+  "full": {
+    "tokens": 4096,
+    "d_model": 4096,
+    "d_out": 4096
+  },
+  "cases": [
+    "uniform",
+    "skew",
+    "all_to_one",
+    "uneven",
+    "empty"
+  ]
+}

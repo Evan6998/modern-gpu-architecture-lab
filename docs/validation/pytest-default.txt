@@ -1,0 +1,6 @@
+....................................................ssssssssssssssssssss [ 33%]
+sssssssssssssss.....ssssssssssssssssssssssss............ssssssssssss.... [ 67%]
+............sssssssssssssss.....ssssssssssss..........................   [100%]
+=========================== short test summary info ============================
+SKIPPED [98] conftest.py:21: GPU tests require --run-gpu (these skips are NOT assignment credit)
+116 passed, 98 skipped in 0.42s

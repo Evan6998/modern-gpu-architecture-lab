@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "modern-gpu-architecture-lab"
+version = "0.1.0"
+description = "Six assignment-first GPU architecture labs with public tests and benchmarks"
+requires-python = ">=3.10"
+dependencies = ["torch>=2.6"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ninja>=1.11"]
+triton = ["triton>=3.3; sys_platform == 'linux'"]
+cute = ["nvidia-cutlass-dsl; sys_platform == 'linux'"]
+
+[project.scripts]
+mgpu-doctor = "mgpu.doctor:main"
+mgpu-bench = "mgpu.bench:main"
+mgpu-grade = "mgpu.grade:main"
+
+[tool.setuptools.packages.find]
+include = ["mgpu*", "assignments*"]
+
+[tool.setuptools.package-data]
+assignments = ["**/*.cu", "**/*.cpp", "**/*.cuh", "**/*.json", "**/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "assignments"]
+addopts = "-ra"
+markers = [
+    "gpu: requires explicit --run-gpu and an NVIDIA GPU",
+    "student: checks an implementation that is intentionally unfinished",
+    "arch(name): requires a specific supported architecture family",
+    "distributed: multiprocess test (launched separately)",
+]

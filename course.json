@@ -1,0 +1,93 @@
+{
+  "name": "Modern GPU Architecture Lab",
+  "version": "0.1.0",
+  "created": "2026-10-05",
+  "language": "zh-CN",
+  "scope": "NVIDIA general-purpose GPU compute; assignment starter kit, not completed solutions",
+  "assignments": [
+    {
+      "id": "a1",
+      "directory": "assignments/a1_memory",
+      "title": "SIMT 与内存层次",
+      "backend": "CUDA C++",
+      "architecture": "传统 SIMT → Volta 同步语义",
+      "topics": "transpose / softmax",
+      "rubric": {
+        "correctness": 40,
+        "architecture_evidence": 30,
+        "measurement_and_ablation": 20,
+        "report": 10
+      }
+    },
+    {
+      "id": "a2",
+      "directory": "assignments/a2_ampere",
+      "title": "Tensor Core 与异步搬运",
+      "backend": "CUDA C++",
+      "architecture": "Volta/Turing 编程思想 → Ampere",
+      "topics": "GEMM: SIMT → MMA → cp.async",
+      "rubric": {
+        "correctness": 40,
+        "architecture_evidence": 30,
+        "measurement_and_ablation": 20,
+        "report": 10
+      }
+    },
+    {
+      "id": "a3",
+      "directory": "assignments/a3_hopper",
+      "title": "Hopper 原生流水线",
+      "backend": "CuTe DSL 或 CUDA C++",
+      "architecture": "Hopper",
+      "topics": "TMA / WGMMA / warp specialization / cluster",
+      "rubric": {
+        "correctness": 40,
+        "architecture_evidence": 30,
+        "measurement_and_ablation": 20,
+        "report": 10
+      }
+    },
+    {
+      "id": "a4",
+      "directory": "assignments/a4_blackwell",
+      "title": "Blackwell 计算模型与低精度",
+      "backend": "CuTe DSL 或 CUDA C++",
+      "architecture": "数据中心 Blackwell SM100",
+      "topics": "tcgen05 / TMEM / 2-SM / FP8 / MXFP4",
+      "rubric": {
+        "correctness": 40,
+        "architecture_evidence": 30,
+        "measurement_and_ablation": 20,
+        "report": 10
+      }
+    },
+    {
+      "id": "a5",
+      "directory": "assignments/a5_attention",
+      "title": "IO-aware Attention",
+      "backend": "Triton",
+      "architecture": "现代 kernel compiler 与融合",
+      "topics": "causal FlashAttention forward / CUDA Graph",
+      "rubric": {
+        "correctness": 40,
+        "architecture_evidence": 30,
+        "measurement_and_ablation": 20,
+        "report": 10
+      }
+    },
+    {
+      "id": "a6",
+      "directory": "assignments/a6_moe",
+      "title": "多 GPU Mini-MoE",
+      "backend": "CUDA + NCCL / torch.distributed",
+      "architecture": "单卡 → NVLink/NVSwitch → 网络跨域",
+      "topics": "token dispatch / expert GEMM / return / overlap",
+      "rubric": {
+        "correctness": 40,
+        "architecture_evidence": 30,
+        "measurement_and_ablation": 20,
+        "report": 10
+      }
+    }
+  ]
+}

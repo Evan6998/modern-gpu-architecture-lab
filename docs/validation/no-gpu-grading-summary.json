@@ -1,0 +1,20 @@
+{
+  "assignment": "a1",
+  "status": "failed_or_incomplete",
+  "cpu_only": false,
+  "exit_codes": [
+    4
+  ],
+  "counts": {
+    "tests": 0,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "manual_review_required": [
+    "architecture evidence",
+    "performance/ablation",
+    "report"
+  ],
+  "numeric_grade": null
+}

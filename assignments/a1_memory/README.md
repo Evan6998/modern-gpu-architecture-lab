@@ -1,0 +1,49 @@
+# A1 · SIMT 与内存层次
+
+**传统 SIMT → Volta 同步语义 · CUDA C++**
+
+
+## 任务
+
+依次完成 `transpose` 的 naive / tiled / padded 三版，以及 `softmax` 的 shared / shuffle 两版。
+保留旧版，不能让三个 variant 都指向同一个优化 kernel。
+转置用于观察 coalescing、shared-memory tiling 和 bank conflict；softmax 用于练习稳定 reduction、
+warp mask、跨 warp 合并、register pressure 和 occupancy。[CUDA-BEST]
+
+## 接口与边界
+
+```python
+transpose(x, out, *, variant="naive", config=None)  # FP32 X[M,N] -> out[N,M]
+softmax(x, out, *, variant="shuffle", config=None)  # FP32 X[rows,width] -> 同形 out
+```
+
+所有矩阵 contiguous、row-major、有限值、非空；输入不能修改，out 不得 alias 输入。
+softmax 只对最后一维，必须数值稳定。支持非整齐 shape，不支持 autograd。
+**实现位置：`csrc/kernels.cu`**。bindings、当前 stream 获取及 lazy compilation 已提供。
+不要依赖 warp 内无条件 lockstep 来省掉必要同步。
+
+## 公开测试
+
+转置覆盖 1×1、非方阵、tile 边界与尾块；softmax 覆盖宽度 1/31/32/33/127/128/129/1024/8192/8193、
+±10000 常数行、随机较大 logits、概率和、输入未修改。NaN out 检查会暴露没有写全的输出。
+
+```bash
+python -m pytest assignments/a1_memory -m 'not gpu'
+python -m mgpu.grade a1 --variant naive
+python -m mgpu.grade a1
+python -m mgpu.bench a1 --op transpose --variant padded --suite full
+python -m mgpu.bench a1 --op softmax --variant shuffle --suite full
+python -m mgpu.bench a1 --op softmax --impl library --suite full
+```
+
+## 实验与提交
+
+固定 workload 在 `benchmark.json`。只做 block/tile 布局的少量对照，不做无限搜索。
+提交各版本 latency、逻辑 bytes、profiler 的实际 L2/DRAM traffic、shared-memory bank-conflict 证据。
+至少解释一个“occupancy 更高但速度没有更快”的配置。不要把 cache 带宽叫作 HBM 带宽。
+
+## 提交与评分
+
+填写本目录 `REPORT.md` 和 `submission.json`，附源码改动、测试结果、CSV 与必要的 trace/PTX/SASS。
+每题 100 分：正确性 40、架构证据 30、测量消融 20、报告 10。
+完整规则见 [GRADING.md](../../docs/GRADING.md)，资料标签见 [SOURCES.md](../../docs/SOURCES.md)。

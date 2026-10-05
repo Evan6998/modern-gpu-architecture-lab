@@ -1,0 +1,11 @@
+
+*****************************************
+Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+*****************************************
+[Gloo] Rank [Gloo] Rank 0 is connected to 11 is connected to  peer ranks. 1Expected number of connected peer ranks is :  peer ranks. 1Expected number of connected peer ranks is : 
+1
+PASS uniform: reference/serial, worst-rank p50=0.9536995000871684 ms
+PASS skew: reference/serial, worst-rank p50=0.6141320000097039 ms
+PASS all_to_one: reference/serial, worst-rank p50=0.6523745000777126 ms
+PASS uneven: reference/serial, worst-rank p50=0.7120965000240176 ms
+PASS empty: reference/serial, worst-rank p50=not timed ms

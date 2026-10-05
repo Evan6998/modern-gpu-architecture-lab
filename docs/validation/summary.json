@@ -1,0 +1,46 @@
+{
+  "scope": "Initial scaffold validation; no student GPU implementation completed",
+  "cpu_tests": {
+    "passed": 116,
+    "gpu_tests_deselected": 98
+  },
+  "default_pytest": {
+    "passed": 116,
+    "gpu_tests_skipped": 98
+  },
+  "distributed_reference": {
+    "backend": "gloo",
+    "ranks": 2,
+    "cases": [
+      "uniform",
+      "skew",
+      "all_to_one",
+      "uneven",
+      "empty"
+    ],
+    "status": "passed",
+    "worst_rank_timing_pipeline": "passed"
+  },
+  "benchmark_reference_smoke": [
+    "a1/transpose",
+    "a2/gemm",
+    "a3/gemm",
+    "a4/gemm",
+    "a4/mxfp4/end_to_end",
+    "a5/attention"
+  ],
+  "editable_install": "passed",
+  "python_compilation": "passed",
+  "shell_syntax": "passed",
+  "gpu_grading_without_cuda": "correctly_rejected_exit_1",
+  "not_tested": [
+    "CUDA C++ compilation",
+    "CUDA student correctness",
+    "CuTe DSL kernels",
+    "Triton kernel execution",
+    "NCCL execution",
+    "multi-node execution",
+    "Nsight and Compute Sanitizer",
+    "Rubin feature compilation or hardware"
+  ]
+}
