@@ -13,6 +13,8 @@ python -m mgpu.grade a6 --nproc 2  # 分别验收 serial 和 overlap
 ```
 
 单卡 grading 用 `--require-gpu --strict-hardware`，无 CUDA、错误架构、零测试、skip 都不能通过。
+每条命令默认限时 1800 秒（`--timeout`）；首次运行包含 nvcc / Triton / CuTe 编译，
+超时记为退出码 124 并判为未通过，而不是当作数值错误。`--variant` 必须是该题登记的 variant 名。
 核心 TODO 会抛异常 / 留下 NaN；不会被测试改成 xfail，也不会自动 fallback 到参考实现。
 `summary.json` 只声明自动正确性结果，`numeric_grade` 留空，不能由测试数量机械推出总成绩。
 

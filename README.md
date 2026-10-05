@@ -31,7 +31,7 @@ A2 在支持的较新 GPU 上练习早期 Tensor Core 编程思想，不等于�
 CUDA toolkit、驱动和 GPU 架构必须匹配，详见 [环境与硬件](docs/HARDWARE.md)。
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
 
@@ -64,6 +64,7 @@ python -m mgpu.bench a1 --op transpose --impl reference --device cpu --suite smo
 ```
 
 这里产生的是 **CPU reference wall time**，不是 GPU 性能。不要用它填写 GPU 作业成绩。
+macOS / 无 GPU 机器上能做和不能做的事，见 [环境与硬件](docs/HARDWARE.md) 末尾一节。
 
 ## 项目结构
 

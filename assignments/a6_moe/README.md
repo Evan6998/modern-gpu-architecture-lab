@@ -10,6 +10,14 @@
 先 serial，再分块 overlap；复用 A2–A4 的 GEMM，不训练 router、不实现完整 MLP/backward。
 通信可以使用 NCCL / torch.distributed；算法与 split-size/metadata 管理由你实现。[TORCH-DIST]
 
+数学定义：`out[t] = x[t] @ W[routes[t]]`，其中 `W[e]` 是 expert e 的 `[D,H]` 权重，无 bias；
+FP16 输入/输出、FP32 累加，与 A2 的 GEMM 约定相同。
+
+**复用 GEMM 时注意 shape**：expert GEMM 的 M 是路由到该 expert 的 token 数，任意且可为 0；
+smoke 用 D=64、H=32。只有 A2 的 GEMM 接受任意 shape。A3 / A4 的 kernel 要求 M、N 为 128 倍数
+（且分别只在 SM90 / SM100 上运行），直接复用必须自己 pad M 和 N，pad 出的行列不能写回结果，
+其 workspace 与拷贝开销要计入报告。正确性验收建议先用 A2 的 kernel 跑通。
+
 ## 接口与所有权
 
 ```python

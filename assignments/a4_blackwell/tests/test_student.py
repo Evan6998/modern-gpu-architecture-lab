@@ -9,16 +9,20 @@ pytestmark=[pytest.mark.gpu,pytest.mark.student,pytest.mark.arch("blackwell")]
 
 
 @pytest.mark.parametrize("variant",["tcgen05_1sm","tcgen05_2sm","persistent"])
-@pytest.mark.parametrize("dims",[(128,128,64),(256,128,256),(256,256,512)])
+@pytest.mark.parametrize("dims",[(128,128,64),(256,128,256),(128,384,160),(256,256,512)])
 def test_dense(variant,dims,cuda_device):
     exercise_gemm("a4",dims,variant,cuda_device,repetitions=3)
 
 
 @pytest.mark.parametrize("format",["fp8","mxfp4"])
 @pytest.mark.parametrize("pattern",["random","zero","mixed_scales"])
-def test_quantized(format,pattern,cuda_device):
-    a=rand((128,64),cuda_device,torch.float16,123)
-    bt=rand((128,64),cuda_device,torch.float16,127)
+# K=64 is a single MXFP4 MMA step on a single output tile; the larger shapes
+# make the K loop, the tile grid and the per-tile scale layout observable.
+@pytest.mark.parametrize("dims",[(128,128,64),(256,128,128),(128,384,192)])
+def test_quantized(format,pattern,dims,cuda_device):
+    m,n,k=dims
+    a=rand((m,k),cuda_device,torch.float16,123)
+    bt=rand((n,k),cuda_device,torch.float16,127)
     if pattern=="zero":a.zero_()
     if pattern=="mixed_scales":a[:,32:].mul_(8);bt[:,:32].mul_(.125)
     qa,qb=quantize_reference(a,format),quantize_reference(bt,format)

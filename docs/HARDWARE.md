@@ -16,7 +16,7 @@
 
 ## 安装
 
-CPU/macOS 可用来编辑与检查 oracle，但本项目不使用 MPS 冒充 CUDA。
+CPU/macOS 可用来编辑与检查 oracle，但本项目不使用 MPS 冒充 CUDA；具体边界见本页末尾。
 GPU 实验建议 Linux。先选与你的驱动/GPU 匹配的 PyTorch CUDA build，再装项目：
 
 ```bash
@@ -38,6 +38,12 @@ bash scripts/lock_environment.sh results/my-gpu-environment
 
 A1/A2 的 PyTorch extension 还需要本机 C++ compiler、`nvcc`、CUDA headers 和 Ninja。
 只有 PyTorch runtime wheel 而没有完整 toolkit，不能编译 `.cu` 文件。[TORCH-EXT]
+C++ 标准由 PyTorch 自己决定，`mgpu/extension.py` 不传 `-std`：PyTorch 2.11 及更早的 extension
+构建用 C++17，2.12 起改为 C++20，2.14.1 的头文件在 C++17 下直接 `#error`。host compiler 和 `nvcc`
+要支持所装 PyTorch 需要的标准。`MGPU_BUILD_VERBOSE=1` 打印完整编译输出。
+
+`nvidia-cutlass-dsl` 默认依赖 CUDA 12 的运行库；CUDA 13 环境装 `nvidia-cutlass-dsl[cu13]`
+（2026-10-05 查阅 PyPI 4.8.0 的依赖声明），与 PyTorch 的 CUDA 大版本保持一致。
 
 ```bash
 nvcc --version
@@ -58,3 +64,30 @@ A4 的 RTX / 数据中心区分与未来架构兼容策略在 `mgpu/hardware.py`
 
 测试失败要区分：**环境不支持**、**starter 未实现**、**数值错误**、**同步/内存错误**。
 这四种情况都不能用“跳过后全绿”代替正式验收。
+
+## 在 macOS / 没有 NVIDIA GPU 的机器上
+
+能做（2026-10-05 在 macOS arm64、PyTorch 2.14.1 上实测）：
+
+- `make check`、`make cpu`、`make dist-smoke`，以及
+  `python -m mgpu.bench <题> --impl reference --device cpu --suite smoke`：
+  检查 oracle、数据生成、计时与 CSV 管道。
+- 读题、读 reference、写报告，分析从 GPU 机器拷回来的 CSV / trace。
+- 纯 host 侧逻辑的原型：A4 `prepare_quantized` 的布局变换（纯 tensor 操作，可对照
+  `dequantize_reference`）；A5 online softmax 的 tile 循环（先用 PyTorch 在 CPU 上对照
+  `reference.attention`）；A6 的分桶、permute、split-size 与还原（单进程模拟多个 rank）。
+
+不能做：
+
+- 编译 `.cu`：CUDA toolkit 没有 macOS 版本，A1 / A2 的 extension 无法构建。
+- 安装 Triton 与 CuTe DSL：两者都没有 macOS 发行版，A3 / A4 / A5 的 kernel 无法运行。
+- NCCL：A6 的学生实现要求 CUDA + NCCL；Gloo 只用来验证 reference harness。
+- 任何不带 `--cpu` 的 `mgpu.grade`，以及任何性能数字。MPS 不是 CUDA。
+
+所以 kernel 的“改代码 → 编译 → 测试 → profile”循环应当直接放在 GPU 机器上（SSH 或远程 IDE），
+macOS 只承担上面“能做”的部分。注意 A3 只在 SM90、A4 只在 SM100 上验收，开工前先用 `make doctor`
+确认目标机器的 `lab_families`。
+
+`make dist-smoke` 把 rendezvous 固定在回环地址：torchrun 默认对外通告主机 FQDN，
+主机名解析不了时（笔记本上很常见）会一直重试到超时。README 里其他单机 `--standalone`
+命令遇到同样的症状时，加上 `--local_addr=127.0.0.1`。

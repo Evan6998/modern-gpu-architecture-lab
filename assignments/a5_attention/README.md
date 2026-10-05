@@ -9,6 +9,14 @@
 不得将完整 `S×S` scores 或 probabilities 写回 global memory。
 本题采用 Triton，把前题的硬件模型映射到 compiler 生成的代码。[TRITON-ATTN]
 
+数学定义（`d = 128`，对每个 batch、head 独立）：
+
+```text
+out[i] = Σ_{j ≤ i} softmax_j( q[i]·k[j] / √d ) · v[j]
+```
+
+缩放因子是 `1/√d`，mask 是严格 causal（第 i 行只看 j ≤ i）；这也是 `reference.py` 的定义。
+
 ## 接口与边界
 
 ```python
@@ -20,11 +28,17 @@ attention(q, k, v, out, *, variant="fused", config=None)
 不做 dropout、GQA、backward。必须支持非整齐 S。
 **实现位置：`kernels.py`**，已有 Triton kernel 签名和 launcher 接口；先实现 kernel 再启用 launcher。
 运行之前安装匹配设备的 Triton；CPU reference 测试不需要 import Triton。
+`config` 读 `tile_m / tile_n`（即 `BLOCK_M / BLOCK_N`）、`warps`、`stages`；公开测试只用默认值 128 / 128 / 4 / 2。
 
 ## 公开测试
 
 S=1/17/129/256/1024；零 logits 应得到 causal prefix average；随机数据、future-token invariance、
 输入不变和 PyTorch allocator 可观察的 workspace 检查。
+
+数据有三种：`zero_logits`、`random`、`peaked`。前两种的 logits 几乎为零（`random` 的标准差约 0.06），
+attention 近似 prefix average，只能查 mask、尾块和缩放；`peaked` 把 Q 放大 32 倍（logit 标准差约 2），
+running max 会在 key tile 之间真实变化，online softmax 的重缩放写错在这里才会明显超出容差。
+benchmark 数据也使用放大后的 Q，计时前的正确性检查与测试同容差。
 workspace test 不是完整的 adversarial 内存审计，仍需 profiler 检查实际 HBM traffic。
 
 ```bash

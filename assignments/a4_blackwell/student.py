@@ -36,6 +36,10 @@ def quant_gemm(prepared, out, *, config=None):
     contracts.distinct_output(out, a.data, a.scales, bt.data, bt.scales)
     if a.logical_shape[0] % 128 or bt.logical_shape[0] % 128 or a.logical_shape[1] % 32:
         raise ValueError("A4 M,N must be multiples of 128; K a multiple of 32")
+    if a.format == "mxfp4" and a.logical_shape[1] % 64:
+        # One tcgen05 kind::mxf4 MMA consumes K=64, i.e. two 32-element scale
+        # blocks. A zero-padded K%64==32 tail is outside this assignment.
+        raise ValueError("A4 MXFP4 K must be a multiple of 64")
     cfg = KernelConfig.parse(config)
     require("blackwell", out.device)
     kernels.launch_quantized(prepared, out, cfg)

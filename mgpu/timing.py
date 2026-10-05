@@ -12,6 +12,9 @@ class Timing:
     samples_ms: list[float]
     scope: str
     cache_policy: str
+    # PyTorch-allocator-visible operator workspace (CUDA only). The harness's
+    # own eviction buffer is allocated before the baseline and never counted.
+    peak_extra_bytes: int | None = None
 
     @property
     def p50_ms(self):
@@ -34,10 +37,13 @@ def measure(fn: Callable[[], None], *, device: torch.device, warmup=10,
         raise ValueError("CUDA graphs and cache eviction require CUDA")
     for _ in range(warmup):
         fn()
+    peak = None
     if device.type == "cuda":
         torch.cuda.synchronize(device)
         with torch.cuda.device(device):
             evict = torch.empty(evict_mb * 1024 * 1024, dtype=torch.uint8, device=device) if evict_mb else None
+            baseline = torch.cuda.memory_allocated(device)
+            torch.cuda.reset_peak_memory_stats(device)
             invoke = fn
             if graph:
                 g = torch.cuda.CUDAGraph()
@@ -57,10 +63,11 @@ def measure(fn: Callable[[], None], *, device: torch.device, warmup=10,
                 end.record()
                 end.synchronize()
                 samples.append(start.elapsed_time(end))
+            peak = max(0, torch.cuda.max_memory_allocated(device) - baseline)
         scope = "cuda_graph_operator" if graph else "cuda_events_operator"
     else:
         samples = []
         for _ in range(repeats):
             start = perf_counter(); fn(); samples.append((perf_counter() - start) * 1000)
         scope = "cpu_reference_wall_time"
-    return Timing(samples, scope, f"eviction_buffer_{evict_mb}MiB" if evict_mb else "warm_reused_inputs")
+    return Timing(samples, scope, f"eviction_buffer_{evict_mb}MiB" if evict_mb else "warm_reused_inputs", peak)

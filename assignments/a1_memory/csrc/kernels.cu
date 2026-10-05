@@ -16,7 +16,11 @@ __global__ void transpose_naive(const float* x, float* y, int m, int n) {
 // The last warp can be partial; never read a value from an inactive lane.
 // Tests contain rows wider than a block and non-multiples of 32.
 
-void transpose_cuda(torch::Tensor x, torch::Tensor out, int64_t variant) {
+// `tile` is config["tile_m"] (default 32): the shared-memory tile edge for
+// tiled/padded and the 2-D block edge for naive. `warps` is config["warps"]
+// (default 4): warps per block for softmax. TORCH_CHECK the values you support;
+// never silently substitute another value, because the CSV records the request.
+void transpose_cuda(torch::Tensor x, torch::Tensor out, int64_t variant, int64_t tile) {
     const c10::cuda::CUDAGuard guard(x.device());
     auto stream = at::cuda::getCurrentCUDAStream(x.get_device());
     TORCH_CHECK(false, "TODO(A1): implement and dispatch transpose kernels in csrc/kernels.cu");
@@ -25,7 +29,7 @@ void transpose_cuda(torch::Tensor x, torch::Tensor out, int64_t variant) {
     // C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
-void softmax_cuda(torch::Tensor x, torch::Tensor out, int64_t variant) {
+void softmax_cuda(torch::Tensor x, torch::Tensor out, int64_t variant, int64_t warps) {
     const c10::cuda::CUDAGuard guard(x.device());
     auto stream = at::cuda::getCurrentCUDAStream(x.get_device());
     TORCH_CHECK(false, "TODO(A1): implement shared/shuffle softmax");

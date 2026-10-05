@@ -11,7 +11,7 @@ from mgpu.registry import ASSIGNMENTS, module
 from mgpu.config import KernelConfig
 from mgpu.hardware import require
 from mgpu.doctor import snapshot
-from mgpu.checks import assert_output, error_metrics
+from mgpu.checks import assert_output, error_metrics, TOLERANCES
 from mgpu.precision import strict_reference_precision
 from mgpu.timing import measure
 from mgpu.quantization import (quantize_reference, PreparedQuantizedGemm,
@@ -29,6 +29,12 @@ def rand(shape, device, dtype, seed):
     # CPU-side generator makes the public dataset identical across GPU families.
     g = torch.Generator().manual_seed(seed)
     return (torch.randn(shape, generator=g, dtype=torch.float32) * 0.25).to(device=device, dtype=dtype)
+
+
+# rand() alone gives attention logits with std ~0.06: softmax is then almost a
+# plain prefix average and a wrong online-softmax rescale stays inside the
+# tolerance. Scaling Q by this (exact, power-of-two) gain gives logit std ~2.
+ATTENTION_Q_GAIN = 32
 
 
 def prepare_case(aid, op, dims, impl, variant, device, config, quant_scope):
@@ -63,6 +69,7 @@ def prepare_case(aid, op, dims, impl, variant, device, config, quant_scope):
         return fn,out,expected,0,(x.numel()+out.numel())*4,quant_error
     if op == "attention":
         q,k,v=[rand(dims,device,torch.float16,s) for s in (17,23,29)]
+        q.mul_(ATTENTION_Q_GAIN)
         expected=ref.attention(q,k,v);out=torch.full_like(expected,float("nan"))
         if impl=="student":
             fn=lambda: student.attention(q,k,v,out,variant=variant,config=config)
@@ -140,6 +147,9 @@ def main(argv=None):
     if op not in spec["ops"]: p.error(f"Operations: {list(spec['ops'])}")
     variant=args.variant or spec["ops"][op][0]
     if variant not in spec["ops"][op]: p.error(f"Variants: {spec['ops'][op]}")
+    # reference/library ignore the student variant; do not label their rows with
+    # one. quant_gemm is the exception: there the variant selects the data format.
+    label=variant if args.impl=="student" or op=="quant_gemm" else "n/a"
     try:
         config=json.loads(args.config); KernelConfig.parse(config)
     except (ValueError,TypeError) as exc: p.error(str(exc))
@@ -167,21 +177,16 @@ def main(argv=None):
             for dims in dims_list:
                 fn,out,expected,flops,io_bytes,quant_err=prepare_case(args.assignment,op,dims,args.impl,variant,device,config,args.quant_scope)
                 fn()
-                atol,rtol=(2e-6,2e-5) if args.assignment=="a1" else (0.03,0.01)
+                atol,rtol=TOLERANCES[op]
                 assert_output(out,expected,atol=atol,rtol=rtol)
                 err=error_metrics(out,expected)
-                peak=None
                 if device.type=="cuda":
                     # Compile/cache before measuring workspace or timing.
                     fn();torch.cuda.synchronize(device)
-                    before=torch.cuda.memory_allocated(device)
-                    torch.cuda.reset_peak_memory_stats(device)
                 t=measure(fn,device=device,warmup=args.warmup,repeats=args.repeats,evict_mb=args.evict_mb,graph=args.graph)
-                if device.type=="cuda":
-                    peak=max(0,torch.cuda.max_memory_allocated(device)-before)
                 gpu=env["devices"][torch.cuda.current_device()] if device.type=="cuda" else {}
                 row=dict(zip(COLUMNS,[None]*len(COLUMNS)))
-                row.update(run_id=run_id,assignment=args.assignment,op=op,impl=args.impl,variant=variant,
+                row.update(run_id=run_id,assignment=args.assignment,op=op,impl=args.impl,variant=label,
                     shape=json.dumps(dims),config=json.dumps(config,sort_keys=True),device=str(device),
                     gpu_name=gpu.get("name"),sm=json.dumps(gpu.get("compute_capability")),
                     scope=t.scope,cache_policy=t.cache_policy,
@@ -190,11 +195,11 @@ def main(argv=None):
                     p10_ms=t.percentile(.1),p90_ms=t.percentile(.9),
                     tflops_estimate=flops/t.p50_ms/1e9 if device.type=="cuda" and t.p50_ms>0 else None,
                     logical_io_gbs_estimate=io_bytes/t.p50_ms/1e6 if device.type=="cuda" and t.p50_ms>0 else None,
-                    peak_extra_allocated_bytes=peak,kernel_max_abs=err["max_abs"],kernel_relative_rmse=err["relative_rmse"],
+                    peak_extra_allocated_bytes=t.peak_extra_bytes,kernel_max_abs=err["max_abs"],kernel_relative_rmse=err["relative_rmse"],
                     quantization_max_abs=quant_err["max_abs"],quantization_relative_rmse=quant_err["relative_rmse"],
                     samples_ms=json.dumps(t.samples_ms))
                 append_csv(folder/"bench.csv",row)
-                print(f"{args.assignment} {op} {dims} {args.impl}/{variant}: {t.p50_ms:.4f} ms [{t.scope}]",flush=True)
+                print(f"{args.assignment} {op} {dims} {args.impl}/{label}: {t.p50_ms:.4f} ms [{t.scope}]",flush=True)
         env["status"]="completed"
     except Exception as exc:
         env["status"]="failed";env["error"]=f"{type(exc).__name__}: {exc}"

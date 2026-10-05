@@ -18,6 +18,9 @@ def compatible(family: str, cc: tuple[int, int]) -> bool:
 def require(family: str, device=None) -> None:
     if not torch.cuda.is_available():
         raise RuntimeError("NVIDIA CUDA is unavailable; run CPU reference checks instead")
+    if device is not None and torch.device(device).type != "cuda":
+        # Same error on a GPU machine as on a CPU-only one.
+        raise RuntimeError(f"Student kernels take CUDA tensors; got device {device}")
     cc = torch.cuda.get_device_capability(device)
     if not compatible(family, cc):
         raise RuntimeError(f"{family} lab is not enabled for SM {cc[0]}.{cc[1]}; see docs/HARDWARE.md")

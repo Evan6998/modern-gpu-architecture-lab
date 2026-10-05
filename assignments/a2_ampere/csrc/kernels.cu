@@ -22,6 +22,8 @@ void gemm_cuda(torch::Tensor a, torch::Tensor b, torch::Tensor out,
     const c10::cuda::CUDAGuard guard(a.device());
     auto stream = at::cuda::getCurrentCUDAStream(a.get_device());
     TORCH_CHECK(false, "TODO(A2): dispatch simt/mma/async GEMM");
+    // TORCH_CHECK the tile/stages/warps values you support; never silently
+    // substitute another value, because the CSV records what was requested.
     // Set dynamic-SMEM opt-in if needed; launch on stream.
     // C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
