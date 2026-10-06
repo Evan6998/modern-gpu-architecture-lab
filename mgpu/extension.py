@@ -5,6 +5,22 @@ import os
 import shutil
 
 
+def pybind11_include_paths(torch_dir):
+    """Extra include paths for PyTorch builds that do not bundle pybind11.
+
+    pip wheels ship the headers under torch/include/pybind11. Distribution
+    builds (for example an apt-packaged PyTorch) do not; there the separately
+    installed ``pybind11`` module provides them.
+    """
+    if (Path(torch_dir) / "include" / "pybind11").exists():
+        return []
+    try:
+        import pybind11
+    except ImportError:
+        return []  # system-wide headers may still exist; let the compiler decide
+    return [pybind11.get_include()]
+
+
 @lru_cache(maxsize=None)
 def load_extension(assignment: str):
     import torch
@@ -28,6 +44,7 @@ def load_extension(assignment: str):
     return load(
         name=f"mgpu_{assignment}",
         sources=[str(src / "bindings.cpp"), str(src / "kernels.cu")],
+        extra_include_paths=pybind11_include_paths(Path(torch.__file__).parent),
         extra_cflags=["-O3"],
         extra_cuda_cflags=["-O3", "-lineinfo", "--ptxas-options=-v"],
         verbose=os.environ.get("MGPU_BUILD_VERBOSE", "0") == "1",

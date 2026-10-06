@@ -62,6 +62,20 @@ A3/A4 的 CuTe backend 由学生接入，不默认帮你编译或下载 CUTLASS 
 它不会安装驱动、修改时钟、修改 persistence mode 或访问远程集群。
 A4 的 RTX / 数据中心区分与未来架构兼容策略在 `mgpu/hardware.py` 中明确编码。
 
+第一次拿到一台 GPU 机器时，先跑一遍首检：
+
+```bash
+bash scripts/gpu_smoke.sh
+```
+
+它依次检查驱动与工具链、`make doctor` / `make check` / `make cpu`、A1 与 A2 的 starter 能否编译并停在各自的 `TODO`、
+library baseline 能否通过 benchmark 的正确性检查，以及 `ncu` 能否读到 GPU 性能计数器。每一项都会执行，
+最后汇总没通过的项。starter 编译不过是环境问题，不是作业没做。
+
+有些 PyTorch 不像 pip wheel 那样自带 pybind11 头文件（例如以系统包形式安装的发行版），A1 / A2 的 extension
+会报 `pybind11/pybind11.h: No such file`。装上 `pybind11` 模块即可，`mgpu/extension.py` 会从它取 include 路径。
+`nvcc`、`ncu` 等工具不在 PATH 上时，把 CUDA toolkit 的 `bin` 目录加进 PATH。
+
 测试失败要区分：**环境不支持**、**starter 未实现**、**数值错误**、**同步/内存错误**。
 这四种情况都不能用“跳过后全绿”代替正式验收。
 

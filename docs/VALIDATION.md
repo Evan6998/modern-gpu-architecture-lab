@@ -1,7 +1,7 @@
 # 验证记录
 
-这里记录的是框架质量，不是学生 GPU kernel 的完成成绩。下面第一部分是初始化时的记录，
-第二部分是 2026-10-05 审题修订后的复验。两次都没有 NVIDIA GPU。
+这里记录的是框架质量，不是学生 GPU kernel 的完成成绩。第一部分是初始化时的记录，
+第二部分是 2026-10-05 审题修订后的复验，这两次都没有 NVIDIA GPU；第三部分是之后在两台 GPU 机器上做的首检。
 
 ## 初始化（Linux x86_64，PyTorch 2.10.0+cpu）
 
@@ -60,8 +60,33 @@ GitHub Actions workflow 已写好，但本会话没有把项目推送到 GitHub 
 | A3 GEMM 公开测试只有单个 128×128 tile；A4 量化测试只有 128×128×64 | 读代码 | 增加 M≠N 的多 tile shape |
 | A4 MXFP4 合约写 K%32，而 `kind::mxf4` 一条 MMA 消耗 K=64 | 查阅资料 | 合约收紧为 K%64，题面写明 |
 
-**这些修订同样没有在 GPU 上验证。** 尤其是：去掉 `-std` 后的 nvcc 实际编译、A1 extension 的新签名
+写下上表时，这些修订都还没有在 GPU 上验证过，尤其是：去掉 `-std` 后的 nvcc 实际编译、A1 extension 的新签名
 （`kernels.cu` 只在 host 侧检查了 `bindings.cpp`）、`measure()` 的 CUDA 分支、新增的 23 个 GPU 测试、
 以及 library attention baseline 在放大后的 Q 上能否通过收紧的容差（CPU 上的 FP16 仿真误差约为容差的 0.26 倍）。
-第一次上 GPU 时先跑 `make doctor`、`MGPU_BUILD_VERBOSE=1 python -m mgpu.grade a1 --variant naive`
-（starter 应当编译成功并以 `TODO(A1)` 失败）和各题的 `--impl library` benchmark。
+其中一部分在下一节补上了。
+
+## GPU 首检（2026-10-06）
+
+用 `scripts/gpu_smoke.sh` 在两台机器上各跑了一遍。验证对象仍然是框架和 starter，没有任何学生 kernel。
+
+| 项目 | 1× NVIDIA A10（SM 8.6） | 1× NVIDIA GB200（SM 10.0） |
+|---|---|---|
+| 环境 | x86_64，Ubuntu 22.04，Python 3.10.12，PyTorch 2.7.0（CUDA 12.8），nvcc 12.8.93，g++ 11.4.0，driver 570.148.08 | aarch64，Debian，Python 3.12.4，PyTorch 2.9.1（CUDA 13.1），nvcc 13.1.115，g++ 12.2.0，driver 580.126.20，Triton 3.6.0，CuTe DSL 4.4.2 |
+| `make doctor` 识别的 family | cuda、ampere | cuda、ampere、blackwell |
+| `make check` / `make cpu` | 通过 | 通过（128 passed，121 deselected） |
+| A1 / A2 starter | 编译成功（`sm_86`），停在 `TODO` | 编译成功（`sm_100`），停在 `TODO` |
+| library baseline 通过 benchmark 正确性检查 | A1 transpose / softmax、A2 gemm、A5 attention 全部通过 | 同左 |
+| `--evict-mb 64` 时的 `peak_extra_allocated_bytes` | 0 | 0 |
+| `ncu` 读取 GPU 性能计数器 | 未验证（镜像没有 Nsight Compute） | 通过，不需要 sudo |
+| Triton、CuTe DSL（含 tcgen05 子模块）import | 未检查 | 通过 |
+
+A10 那台的 PyTorch 是系统包，不带 pybind11 头文件，starter 第一次编译因此失败；
+`mgpu/extension.py` 里从 `pybind11` 模块取 include 路径的兜底就是这时加的，加上后两台都编译通过。
+
+这次确认了上一节里原先没验证的几项：去掉 `-std` 后的 nvcc 实际编译（PyTorch 2.7 和 2.9，都是 C++17 路径）、
+A1 extension 的新签名、`measure()` 的 CUDA 分支和 eviction buffer 的统计、
+library attention baseline 在放大后的 Q 上通过收紧的容差。
+
+**仍未验证**：任何学生 kernel 的正确性和性能（121 个 GPU 测试在 starter 上按设计失败）、
+PyTorch ≥ 2.12 的 C++20 编译路径、A3（需要 SM 9.0）、A6 的 NCCL / 多卡 / 跨节点、
+`compute-sanitizer` 与 `nsys` 的实际采集、Rubin。原始日志没有收进仓库。

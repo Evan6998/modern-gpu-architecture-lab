@@ -1,6 +1,7 @@
 import csv
 import json
 from pathlib import Path
+import sys
 import types
 import pytest
 import torch
@@ -12,6 +13,17 @@ from mgpu.checks import assert_output,error_metrics,TOLERANCES
 from mgpu.registry import ASSIGNMENTS,module
 from mgpu.bench import append_csv,COLUMNS,prepare_case
 from mgpu.grade import junit_counts
+
+
+def test_pybind11_headers_found_when_torch_does_not_bundle_them(monkeypatch,tmp_path):
+    from mgpu.extension import pybind11_include_paths
+    bundled=tmp_path/"wheel";(bundled/"include"/"pybind11").mkdir(parents=True)
+    assert pybind11_include_paths(bundled)==[]
+    distro=tmp_path/"distro";(distro/"include").mkdir(parents=True)
+    monkeypatch.setitem(sys.modules,"pybind11",types.SimpleNamespace(get_include=lambda:"/somewhere/pybind11/include"))
+    assert pybind11_include_paths(distro)==["/somewhere/pybind11/include"]
+    monkeypatch.setitem(sys.modules,"pybind11",None)  # import now raises ImportError
+    assert pybind11_include_paths(distro)==[]
 
 
 def test_registry_imports_without_cuda_compilation():
